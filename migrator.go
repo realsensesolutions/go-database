@@ -29,7 +29,11 @@ func UpAll() error {
 		// Handle embedded filesystem sources
 		if source.EmbedFS != nil {
 			log.Printf("📁 Using embedded filesystem for: %s", source.Name)
-			if err := runEmbeddedMigrations(source.EmbedFS, "migrations", source.Prefix); err != nil {
+			subPath := source.SubPath
+			if subPath == "" {
+				subPath = "." // Default to current directory if not specified
+			}
+			if err := runEmbeddedMigrations(source.EmbedFS, subPath, source.Prefix); err != nil {
 				return fmt.Errorf("failed to run embedded migrations for %s: %w", source.Name, err)
 			}
 			log.Printf("✅ Completed embedded migrations for: %s", source.Name)

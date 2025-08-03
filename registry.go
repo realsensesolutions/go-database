@@ -14,6 +14,7 @@ type MigrationSource struct {
 	Name      string    // Human-readable name (e.g., "user-management", "sentipulse-core")
 	Directory string    // File system path to migrations (for file-based sources)
 	EmbedFS   *embed.FS // Embedded filesystem (for embedded migrations)
+	SubPath   string    // Subpath within embedded filesystem (e.g., "migrations", "." for root)
 	Prefix    string    // Optional prefix for migration files (e.g., "user_", "app_")
 }
 
