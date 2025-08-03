@@ -1,35 +1,31 @@
 # Go Database Package
 
-A robust database abstraction layer for Go applications with built-in retry logic, migration support, and connection management.
+A simple SQLite database library for Go with automatic retry logic and migration registry.
 
-## Features
+## ✨ Features
 
-- **🔄 Retry Logic**: Exponential backoff retry mechanism for handling `SQLITE_BUSY` errors
-- **📦 Migration System**: Comprehensive database migration management with versioning
-- **🔗 Connection Management**: Efficient database connection handling and pooling
-- **📊 Registry Support**: Migration registry for multi-package database schemas
-- **⚡ Performance**: Optimized for concurrent database operations
+- **🔄 SQLite Retry Logic**: Automatic retry with exponential backoff for `SQLITE_BUSY` errors
+- **📦 Migration Registry**: Simple migration management across packages
+- **🔗 Connection Management**: Easy database connection handling
 
-## Installation
+## 🚀 Quick Start
 
 ```bash
 go get github.com/realsensesolutions/go-database
 ```
 
-## Quick Start
-
-### Basic Database Operations with Retry
+### Basic Usage
 
 ```go
 package main
 
 import (
-    "database/sql"
     database "github.com/realsensesolutions/go-database"
 )
 
 func main() {
-    db, err := sql.Open("sqlite", "example.db")
+    // Get database connection
+    db, err := database.GetDB()
     if err != nil {
         panic(err)
     }
@@ -39,187 +35,136 @@ func main() {
     result, err := database.ExecWithRetry(db, 
         "INSERT INTO users (name, email) VALUES (?, ?)", 
         "John Doe", "john@example.com")
-    if err != nil {
-        panic(err)
-    }
+
+    // Query with retry logic
+    rows, err := database.QueryWithRetry(db, 
+        "SELECT id, name FROM users WHERE active = ?", true)
+
+    // Single row query with retry
+    var userID string
+    err = database.QueryRowWithRetry(db, 
+        "SELECT id FROM users WHERE email = ?", "john@example.com").Scan(&userID)
 }
 ```
 
-### Database Migrations
+## 🔄 Retry Functions
+
+All standard SQL operations with automatic retry:
 
 ```go
-package main
+// Database operations
+result, err := database.ExecWithRetry(db, query, args...)
+rows, err := database.QueryWithRetry(db, query, args...)
+err := database.QueryRowWithRetry(db, query, args...).Scan(&dest)
 
-import (
-    database "github.com/realsensesolutions/go-database"
-)
+// Transaction operations  
+result, err := database.TxExecWithRetry(tx, query, args...)
+rows, err := database.TxQueryWithRetry(tx, query, args...)
+err := database.TxQueryRowWithRetry(tx, query, args...).Scan(&dest)
 
-func main() {
-    config := database.Config{
-        DatabasePath:    "app.db",
-        MigrationsPath: "./migrations",
-    }
-
-    migrator, err := database.NewMigrator(config)
-    if err != nil {
-        panic(err)
-    }
-
-    // Run all pending migrations
-    err = migrator.Up()
-    if err != nil {
-        panic(err)
-    }
-}
+// Full transaction with retry
+err := database.WithTransactionRetry(func(tx *sql.Tx) error {
+    // Your transaction logic here
+    return nil
+})
 ```
 
-### Custom Retry Configuration
+## 📦 Migration System
+
+### 1. Register Migrations
 
 ```go
-package main
+package mypackage
 
 import (
-    "time"
+    "path/filepath"
+    "runtime"
     database "github.com/realsensesolutions/go-database"
 )
 
-func main() {
-    config := database.RetryConfig{
-        MaxRetryDuration: 60 * time.Second,
-        BaseDelay:       20 * time.Millisecond,
-        MaxDelay:        2 * time.Second,
-        JitterPercent:   0.3,
-    }
-
-    db, _ := sql.Open("sqlite", "example.db")
+func init() {
+    // Get current package directory
+    _, filename, _, _ := runtime.Caller(0)
+    packageDir := filepath.Dir(filename)
+    migrationsDir := filepath.Join(packageDir, "migrations")
     
-    result, err := database.ExecWithRetryConfig(db, config,
-        "UPDATE users SET last_login = ? WHERE id = ?",
-        time.Now(), userID)
+    // Register your migrations
+    database.RegisterMigrations(database.MigrationSource{
+        Name:      "my-package", 
+        Directory: migrationsDir,
+    })
 }
 ```
 
-## Core Components
-
-### Retry System (`retry.go`)
-Handles SQLite database locking with exponential backoff:
-- Automatic retry on `SQLITE_BUSY` errors
-- Configurable retry duration and delays
-- Jitter to prevent thundering herd
-- Support for transactions
-
-### Migration System (`migrator.go`)
-Comprehensive database migration management:
-- Version tracking and rollback support
-- Multiple migration sources
-- Safe concurrent migration execution
-- Integration with `golang-migrate/migrate`
-
-### Registry System (`registry.go`)
-Multi-package schema management:
-- Register migrations from multiple packages
-- Conflict detection and resolution
-- Ordered migration execution
-- Version tracking per registry
-
-### Connection Management (`connection.go`)
-Efficient database connection handling:
-- Connection pooling and lifecycle management
-- Error handling and recovery
-- Integration with retry system
-
-## API Reference
-
-### Retry Functions
+### 2. Run All Migrations
 
 ```go
-// Basic retry functions with default configuration
+package main
+
+import (
+    database "github.com/realsensesolutions/go-database"
+    _ "your-app/package1" // Import to register migrations
+    _ "your-app/package2" // Import to register migrations
+)
+
+func main() {
+    // Run all registered migrations
+    if err := database.RunAllMigrations(); err != nil {
+        panic(err)
+    }
+}
+```
+
+### 3. Migration Files
+
+```
+migrations/
+├── 001_create_users.up.sql
+├── 001_create_users.down.sql
+├── 002_add_indexes.up.sql
+└── 002_add_indexes.down.sql
+```
+
+## ⚙️ Configuration
+
+### Environment Variables
+- `DATABASE_FILE`: SQLite database file path (default: `app.db`)
+
+### Retry Settings
+- **Max Retry Duration**: 30 seconds
+- **Base Delay**: 10 milliseconds  
+- **Max Delay**: 1 second
+- **Jitter**: 25%
+
+## 📋 API Reference
+
+```go
+// Connection
+func GetDB() (*sql.DB, error)
+
+// Retry Operations
 func ExecWithRetry(db *sql.DB, query string, args ...interface{}) (sql.Result, error)
 func QueryWithRetry(db *sql.DB, query string, args ...interface{}) (*sql.Rows, error)
 func QueryRowWithRetry(db *sql.DB, query string, args ...interface{}) *RetryRow
-
-// Custom retry configuration
-func ExecWithRetryConfig(db *sql.DB, config RetryConfig, query string, args ...interface{}) (sql.Result, error)
-func QueryWithRetryConfig(db *sql.DB, config RetryConfig, query string, args ...interface{}) (*sql.Rows, error)
-
-// Transaction support
 func WithTransactionRetry(fn func(*sql.Tx) error) error
+
+// Transaction Operations
+func TxExecWithRetry(tx *sql.Tx, query string, args ...interface{}) (sql.Result, error)
+func TxQueryWithRetry(tx *sql.Tx, query string, args ...interface{}) (*sql.Rows, error)
+func TxQueryRowWithRetry(tx *sql.Tx, query string, args ...interface{}) *TxRetryRow
+
+// Migration Registry
+func RegisterMigrations(source MigrationSource)
+func RunAllMigrations() error
+func GetRegisteredSources() []MigrationSource
 ```
 
-### Migration Functions
+## 🔧 Requirements
 
-```go
-// Create new migrator
-func NewMigrator(config Config) (*Migrator, error)
-func NewSimpleMigrator(databasePath, migrationsPath string) (*Migrator, error)
+- Go 1.22 or later
+- SQLite via `modernc.org/sqlite`
+- Migrations via `golang-migrate/migrate`
 
-// Migration operations
-func (m *Migrator) Up() error
-func (m *Migrator) Down() error
-func (m *Migrator) Version() (uint, error)
-func (m *Migrator) Drop() error
-```
+## 📄 License
 
-### Registry Functions
-
-```go
-// Registry management
-func NewRegistry() *Registry
-func (r *Registry) RegisterMigrations(name string, migrations []Migration) error
-func (r *Registry) RunAllMigrations(databasePath string) error
-```
-
-## Configuration
-
-### Retry Configuration
-
-```go
-type RetryConfig struct {
-    MaxRetryDuration time.Duration  // Maximum total retry time
-    BaseDelay        time.Duration  // Initial delay between retries
-    MaxDelay         time.Duration  // Maximum delay between retries
-    JitterPercent    float64        // Jitter percentage (0.0-1.0)
-}
-```
-
-### Migration Configuration
-
-```go
-type Config struct {
-    DatabaseURL       string  // Database connection URL
-    DatabasePath      string  // Local database file path
-    MigrationsSource  string  // Migration source URL
-    MigrationsPath    string  // Local migrations directory
-}
-```
-
-## Default Values
-
-- **MaxRetryDuration**: 30 seconds
-- **BaseDelay**: 10 milliseconds
-- **MaxDelay**: 1 second
-- **JitterPercent**: 25%
-
-## Requirements
-
-- Go 1.24.5 or later
-- SQLite support via `modernc.org/sqlite`
-- Migration support via `golang-migrate/migrate`
-
-## Contributing
-
-1. Fork the repository
-2. Create a feature branch
-3. Add tests for new functionality
-4. Ensure all tests pass
-5. Submit a pull request
-
-## License
-
-MIT License - see LICENSE file for details.
-
-## Support
-
-- 📖 [Documentation](https://github.com/realsensesolutions/go-database)
-- 🐛 [Issues](https://github.com/realsensesolutions/go-database/issues)
-- 💬 [Discussions](https://github.com/realsensesolutions/go-database/discussions)
+MIT License

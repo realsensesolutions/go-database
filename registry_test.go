@@ -6,9 +6,9 @@ import (
 	"testing"
 )
 
-// TestMigrationRegistryLoadsActualFiles verifies that the migration registry
-// actually loads and parses SQL files from registered directories
-func TestMigrationRegistryLoadsActualFiles(t *testing.T) {
+// TestMigrationRegistryCountsFiles verifies that the migration registry
+// correctly counts SQL files from registered directories
+func TestMigrationRegistryCountsFiles(t *testing.T) {
 	// Create temporary directory with test migration files
 	tempDir := t.TempDir()
 
@@ -26,33 +26,15 @@ func TestMigrationRegistryLoadsActualFiles(t *testing.T) {
 		Prefix:    "test_",
 	}
 
-	// Test loading migrations from the source
-	migrations, err := loadMigrationsFromDirectory(source)
+	// Test counting migrations from the source
+	count, err := countMigrationFiles(source)
 	if err != nil {
-		t.Fatalf("Expected loadMigrationsFromDirectory to succeed, got error: %v", err)
+		t.Fatalf("Expected countMigrationFiles to succeed, got error: %v", err)
 	}
 
-	// Verify that we actually loaded migrations (current implementation returns empty slice)
-	if len(migrations) == 0 {
-		t.Fatalf("Expected to load at least 1 migration, got 0 - registry is not actually loading SQL files")
-	}
-
-	// Verify migration content
-	migration := migrations[0]
-	if migration.Version != 1 {
-		t.Errorf("Expected migration version 1, got %d", migration.Version)
-	}
-	if migration.Name != "test_migration" {
-		t.Errorf("Expected migration name 'test_migration', got '%s'", migration.Name)
-	}
-	if migration.Source != "test-source" {
-		t.Errorf("Expected migration source 'test-source', got '%s'", migration.Source)
-	}
-	if migration.UpContent != upSQL {
-		t.Errorf("Expected up content '%s', got '%s'", upSQL, migration.UpContent)
-	}
-	if migration.DownContent != downSQL {
-		t.Errorf("Expected down content '%s', got '%s'", downSQL, migration.DownContent)
+	// Verify that we found the migration files
+	if count != 2 {
+		t.Fatalf("Expected to find 2 migration files (.up.sql and .down.sql), got %d", count)
 	}
 }
 

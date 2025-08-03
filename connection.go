@@ -2,17 +2,13 @@ package database
 
 import (
 	"database/sql"
-	"errors"
 	"log"
 	"os"
 
 	_ "modernc.org/sqlite"
 )
 
-// Database errors
-var (
-	ErrPointsExceeded = errors.New("point allocation exceeds available points")
-)
+// Database connection management with retry support
 
 // GetDB returns a database connection
 func GetDB() (*sql.DB, error) {
