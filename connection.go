@@ -14,7 +14,7 @@ import (
 func GetDB() (*sql.DB, error) {
 	databaseFile := os.Getenv("DATABASE_FILE")
 	if databaseFile == "" {
-		databaseFile = "app.db" // default fallback
+		panic("DATABASE_FILE environment variable is required but not set")
 	}
 
 	db, err := sql.Open("sqlite", databaseFile)
@@ -22,8 +22,12 @@ func GetDB() (*sql.DB, error) {
 		return nil, err
 	}
 
-	// Test the connection
-	if err := db.Ping(); err != nil {
+	// Test the connection with retry logic for SQLITE_BUSY errors
+	err = retryDatabaseOperation(func() error {
+		return db.Ping()
+	}, DefaultRetryConfig())
+
+	if err != nil {
 		db.Close()
 		return nil, err
 	}
