@@ -8,26 +8,38 @@ import (
 
 // Database connection management with retry support
 
-// GetDB returns a database connection
-func GetDB() (*sql.DB, error) {
+// GetDB returns a database connection with optional Datadog tracing
+func GetDB() (*DB, error) {
 	databaseFile := os.Getenv("DATABASE_FILE")
 	if databaseFile == "" {
 		panic("DATABASE_FILE environment variable is required but not set")
 	}
 
-	db, err := sql.Open("sqlite", databaseFile)
+	sqlDB, err := sql.Open("sqlite", databaseFile)
 	if err != nil {
 		return nil, err
 	}
 
 	// Test the connection with retry logic for SQLITE_BUSY errors
 	err = retryDatabaseOperation(func() error {
-		return db.Ping()
+		return sqlDB.Ping()
 	}, DefaultRetryConfig())
 
 	if err != nil {
-		db.Close()
+		sqlDB.Close()
 		return nil, err
+	}
+
+	// Wrap with tracing support
+	db := &DB{
+		DB:          sqlDB,
+		traced:      isTracingEnabled(),
+		serviceName: getTracingServiceName(),
+		dbPath:      databaseFile,
+	}
+
+	if db.traced {
+		log.Printf("🔍 Database tracing enabled (service: %s, db: %s)", db.serviceName, databaseFile)
 	}
 
 	return db, nil
