@@ -4,8 +4,6 @@ import (
 	"database/sql"
 	"log"
 	"os"
-
-	_ "modernc.org/sqlite"
 )
 
 // Database connection management with retry support
